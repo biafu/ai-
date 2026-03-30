@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: ai-code-helper-2
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+server:
+  port: 8080
+langchain4j:
+  community:
+    dashscope:
+      chat-model:
+       model-name: qwen-max
+       api-key: sk-4956e9b7d2584a11afc5c64cad1bc583
+      embedding-model:
+        model-name: text-embedding-v4
+        api-key: sk-4956e9b7d2584a11afc5c64cad1bc583
+      streaming-chat-model:
+        model-name: qwen-max
+        api-key: sk-4956e9b7d2584a11afc5c64cad1bc583
+bigmodel :
+    api-key: a85b85dcf3ce448fa3349736cc97dab5.qSjSE65vj3DEvj2m
+rag:
+  document-dir: src/main/resources/doce
+  max-files: 10
+  max-file-size-mb: 20
+  allowed-extensions:
+    - txt
+    - md
+    - pdf
+    - docx

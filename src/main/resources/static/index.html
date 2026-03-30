@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 编程助手工作台</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <header class="topbar panel">
+      <div class="topbar-left">
+        <button class="ghost-btn icon-btn" v-if="isMobile" @click="toggleSessionDrawer">会话</button>
+        <div class="brand">
+          <h1>AI 编程助手工作台</h1>
+          <p>流式对话 · 多会话记忆 · 开发者模式</p>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span class="status-pill" :class="statusClass">{{ statusLabel }}</span>
+        <button class="ghost-btn" @click="createSession">新建会话</button>
+        <button class="ghost-btn icon-btn" v-if="isTablet" @click="toggleContextDrawer">上下文</button>
+      </div>
+    </header>
+
+    <div class="backdrop" v-if="showBackdrop" @click="closeDrawers"></div>
+
+    <section class="workspace" :class="workspaceClass">
+      <aside class="panel sessions-panel" :class="sessionsPanelClass">
+        <div class="panel-title-row">
+          <h2>会话列表</h2>
+          <span class="muted-text">{{ sessions.length }} 个</span>
+        </div>
+        <div class="session-list">
+          <button
+            class="session-item"
+            v-for="session in sortedSessions"
+            :key="session.id"
+            :class="{ active: session.id === activeSessionId }"
+            @click="selectSession(session.id)"
+          >
+            <div class="session-main">
+              <p class="session-name">{{ session.name }}</p>
+              <p class="session-preview">{{ sessionPreview(session) }}</p>
+            </div>
+            <div class="session-side">
+              <span class="session-time">{{ formatRelativeTime(session.updatedAt) }}</span>
+              <span class="session-memory">#{{ session.id }}</span>
+            </div>
+          </button>
+        </div>
+        <div class="session-actions">
+          <button class="ghost-btn" @click="renameActiveSession" :disabled="!activeSession">重命名</button>
+          <button class="danger-btn" @click="removeActiveSession" :disabled="!activeSession">删除会话</button>
+        </div>
+      </aside>
+
+      <main class="panel chat-panel">
+        <div class="chat-header">
+          <div>
+            <h2>{{ activeSession ? activeSession.name : "未选择会话" }}</h2>
+            <p class="muted-text">MemoryId：{{ activeSession ? activeSession.id : "-" }}</p>
+          </div>
+          <div class="chat-header-actions">
+            <button class="ghost-btn" @click="regenerateLast" :disabled="generating || !canRegenerate">重新生成</button>
+            <button class="danger-btn" @click="stopStreaming('已手动停止')" :disabled="!generating">停止生成</button>
+          </div>
+        </div>
+
+        <div class="chat-scroll" ref="chatScroll">
+          <div class="empty-state" v-if="!activeMessages.length">
+            <h3>开始你的第一轮提问</h3>
+            <p>你可以让它解释代码、生成单测、排查报错或规划重构。</p>
+            <div class="prompt-grid">
+              <button class="prompt-chip" v-for="item in promptTemplates" :key="item" @click="applyPrompt(item)">
+                {{ item }}
+              </button>
+            </div>
+          </div>
+
+          <article class="message-row" v-for="message in activeMessages" :key="message.id" :class="message.role">
+            <div class="message-bubble">
+              <header class="message-meta">
+                <span>{{ message.role === "user" ? "你" : "AI" }}</span>
+                <span>{{ formatClock(message.createdAt) }}</span>
+              </header>
+              <div class="message-content">
+                <template v-for="(block, index) in splitMessageBlocks(message.content)" :key="index">
+                  <p v-if="block.type === 'text'" class="text-block">{{ block.content }}</p>
+                  <div v-else class="code-block">
+                    <div class="code-lang">{{ block.lang || "code" }}</div>
+                    <pre><code>{{ block.content }}</code></pre>
+                  </div>
+                </template>
+              </div>
+              <footer class="message-footer" v-if="message.status">
+                <span class="muted-text">状态：{{ statusTextMap[message.status] || message.status }}</span>
+              </footer>
+            </div>
+          </article>
+        </div>
+
+        <form class="composer" @submit.prevent="sendMessage">
+          <textarea
+            v-model="draftMessage"
+            rows="3"
+            placeholder="输入你的问题，Enter 发送，Shift + Enter 换行"
+            @keydown="onComposerKeydown"
+          ></textarea>
+          <div class="composer-bottom">
+            <div class="composer-tools">
+              <label class="mode-switch">
+                <span>任务类型</span>
+                <select v-model="taskType">
+                  <option value="general">通用</option>
+                  <option value="topic">选题</option>
+                  <option value="literature">综述</option>
+                  <option value="method">方法</option>
+                  <option value="experiment">实验</option>
+                  <option value="polish">润色</option>
+                </select>
+              </label>
+              <label class="mode-switch">
+                <span>联网模式</span>
+                <select v-model="searchMode">
+                  <option value="auto">自动</option>
+                  <option value="force">强制联网</option>
+                  <option value="off">关闭联网</option>
+                </select>
+              </label>
+              <span class="muted-text">{{ draftMessage.trim().length }} 字</span>
+            </div>
+            <button class="primary-btn" type="submit" :disabled="!canSend">发送</button>
+          </div>
+        </form>
+      </main>
+
+      <aside class="panel context-panel" :class="contextPanelClass">
+        <h2>上下文面板</h2>
+
+        <section class="context-card">
+          <h3>会话概览</h3>
+          <p>总消息数：{{ activeMessages.length }}</p>
+          <p>用户提问：{{ userMessageCount }}</p>
+          <p>AI 回复：{{ assistantMessageCount }}</p>
+        </section>
+
+        <section class="context-card">
+          <h3>本轮请求</h3>
+          <p>MemoryId：{{ requestMeta.memoryId || "-" }}</p>
+          <p>任务：{{ taskTypeLabel(requestMeta.taskType) }}</p>
+          <p>联网：{{ searchModeLabel(requestMeta.searchMode) }}</p>
+          <p>状态：{{ requestMeta.state || "idle" }}</p>
+          <p>耗时：{{ requestMeta.duration ? requestMeta.duration + " ms" : "-" }}</p>
+          <p>开始：{{ requestMeta.startedAt ? formatClock(requestMeta.startedAt) : "-" }}</p>
+        </section>
+
+        <section class="context-card">
+          <h3>能力开关</h3>
+          <div class="tag-group">
+            <span class="tag tag-on">SSE 流式</span>
+            <span class="tag tag-on">RAG 检索</span>
+            <span class="tag tag-on">MCP 工具</span>
+          </div>
+          <p class="muted-text">当前 UI 展示结构已预留，后续可接入真实命中详情。</p>
+        </section>
+
+        <section class="context-card">
+          <h3>知识库文件</h3>
+          <p>容量：{{ knowledgeFiles.length }}/{{ knowledgeMaxFiles }}</p>
+          <p class="muted-text">支持：pdf / docx / md / txt，超出上限会 FIFO 覆盖最早文件。</p>
+          <label class="file-picker">
+            <input type="file" accept=".pdf,.docx,.md,.txt" @change="onKnowledgeFileChange">
+            <span>{{ selectedKnowledgeFileName || "选择文件" }}</span>
+          </label>
+          <button class="primary-btn block-btn" @click="uploadKnowledgeFile" :disabled="!selectedKnowledgeFile || knowledgeUploading">
+            {{ knowledgeUploading ? "上传处理中..." : "上传并重建索引" }}
+          </button>
+          <div class="task-status" v-if="knowledgeTask.taskId">
+            <p>任务：{{ knowledgeTask.taskId }}</p>
+            <p>状态：{{ knowledgeTask.status }} / {{ knowledgeTask.stage }} / {{ knowledgeTask.progress }}%</p>
+            <p>{{ knowledgeTask.message || "-" }}</p>
+            <p v-if="knowledgeTask.replacedFile">已覆盖：{{ knowledgeTask.replacedFile.originalName }}</p>
+          </div>
+          <div class="knowledge-files">
+            <p class="muted-text" v-if="!knowledgeFiles.length">当前没有知识库文件。</p>
+            <div class="knowledge-file-item" v-for="item in knowledgeFiles" :key="item.id">
+              <span class="knowledge-file-name">{{ item.originalName }}</span>
+              <span class="knowledge-file-size">{{ formatFileSize(item.sizeBytes) }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="context-card">
+          <h3>快捷操作</h3>
+          <button class="ghost-btn block-btn" @click="createSession">新建并切换会话</button>
+          <button class="ghost-btn block-btn" @click="clearActiveMessages" :disabled="!activeMessages.length || generating">清空当前消息</button>
+        </section>
+      </aside>
+    </section>
+  </div>
+
+  <script src="/js/vue.global.prod.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
