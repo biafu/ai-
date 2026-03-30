@@ -25,7 +25,7 @@ rag:
   document-dir: src/main/resources/doce
   max-files: 10
   max-file-size-mb: 20
-  allowed-extensions:
+  allowed-extensions: 
     - txt
     - md
     - pdf
