@@ -86,7 +86,7 @@
               </header>
               <div class="message-content">
                 <template v-for="(block, index) in splitMessageBlocks(message.content)" :key="index">
-                  <p v-if="block.type === 'text'" class="text-block">{{ block.content }}</p>
+                  <p v-if="block.type === 'text'" class="text-block">{{ formatTextBlock(block.content) }}</p>
                   <div v-else class="code-block">
                     <div class="code-lang">{{ block.lang || "code" }}</div>
                     <pre><code>{{ block.content }}</code></pre>

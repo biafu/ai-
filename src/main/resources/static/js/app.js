@@ -549,6 +549,22 @@
         }
         return blocks;
       },
+      formatTextBlock(content) {
+        if (!content) {
+          return "";
+        }
+        let text = content;
+        text = text.replace(/\[(ASSISTANT ROLE|OUTPUT CONTRACT|SEARCH MODE|TOOL POLICY|TASK TYPE|QUALITY RULES|USER QUESTION)\]\s*/gi, "");
+        text = text.replace(/^#{1,6}\s*/gm, "");
+        text = text.replace(/^\s*>\s?/gm, "");
+        text = text.replace(/^\s*[-*]\s+/gm, "* ");
+        text = text.replace(/\*\*(.*?)\*\*/g, "$1");
+        text = text.replace(/__(.*?)__/g, "$1");
+        text = text.replace(/`([^`]+)`/g, "$1");
+        text = text.replace(/~{3,}/g, "");
+        text = text.replace(/\n{3,}/g, "\n\n");
+        return text.trim();
+      },
       formatClock(timestamp) {
         if (!timestamp) {
           return "--:--:--";

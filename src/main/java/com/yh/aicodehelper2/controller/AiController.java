@@ -2,6 +2,7 @@ package com.yh.aicodehelper2.controller;
 
 import com.yh.aicodehelper2.ai.AiCodeHelperService;
 import jakarta.annotation.Resource;
+import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,7 +27,7 @@ public class AiController {
     @Resource(name = "aiCodeHelperServiceNoTools")
     private AiCodeHelperService aiCodeHelperServiceNoTools;
 
-    @GetMapping("/chat")
+    @GetMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> chat(int memoryId,
                                               String message,
                                               @RequestParam(defaultValue = "auto") String searchMode,
@@ -83,6 +84,7 @@ public class AiController {
                 - If user asks for references, output only verifiable references.
                 - Keep language concise and academic; avoid vague filler.
                 - For writing tasks, provide directly usable text blocks.
+                - Avoid decorative symbols and heavy Markdown marks.
                 """);
         prompt.append("\n[USER QUESTION]\n").append(normalizedUserMessage);
         return prompt.toString();
